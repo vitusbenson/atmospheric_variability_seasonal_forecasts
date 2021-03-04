@@ -9,3 +9,6 @@ Run from Commandline:
 python avsf/plots.py path-to-base-directory path-to-output-file
 ```
 
+## Requirements
+
+numpy, matplotlib, cartopy, netCDF4, scipy, KDEpy.
