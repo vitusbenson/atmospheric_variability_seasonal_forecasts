@@ -39,7 +39,7 @@ class PlotsAVSF:
             lat = lat[np.logical_and(lat>=34., lat<=59.)]
         
         fig = plt.figure(dpi = 300)
-        fig.suptitle(figtitle)
+        #fig.suptitle(figtitle)
         projection = ccrs.PlateCarree()
         # axes_class = (GeoAxes,
         #           dict(map_projection=projection))
@@ -57,9 +57,10 @@ class PlotsAVSF:
 
         levels = np.linspace(min(year_data.min(),run_data.min()), max(year_data.max(),run_data.max()),8) 
 
-        gs = gridspec.GridSpec(3, 4, figure=fig)
+        gs = gridspec.GridSpec(2, 1, figure=fig, height_ratios = [1.8,1], wspace=0.02, hspace=0.,bottom=0.1, top=0.9, left=0.1, right=0.85)
+        gs0 = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gs[0], wspace=0.02, hspace=0.)
         axes = []
-        ax = fig.add_subplot(gs[:2,:2], projection = projection)
+        ax = fig.add_subplot(gs0[0], projection = projection)
         if extent == "global":
             ax.set_global()
         elif extent == "europe":
@@ -68,7 +69,7 @@ class PlotsAVSF:
         cs = ax.contourf(lon, lat, year_data, levels = levels,transform=ccrs.PlateCarree(),cmap=cmap, **kwargs)
         ax.set_title(r'$\sigma_{year}$', loc = 'left', fontsize = 10)
         axes.append(ax)
-        ax = fig.add_subplot(gs[:2,2:], projection = projection)
+        ax = fig.add_subplot(gs0[1], projection = projection)
         if extent == "global":
             ax.set_global()
         elif extent == "europe":
@@ -77,8 +78,10 @@ class PlotsAVSF:
         cs = ax.contourf(lon, lat, run_data[0,], levels = levels,transform=ccrs.PlateCarree(),cmap=cmap, **kwargs)
         ax.set_title(r'$\sigma_{run}$ '+years[0], loc = 'left', fontsize = 10)
         axes.append(ax)
+        gs1 = gridspec.GridSpecFromSubplotSpec(1, 4, subplot_spec=gs[1], wspace=0.02, hspace=0.)
+        y0, h = ax.get_position().y0, ax.get_position().height
         for idx in range(4):
-            ax = fig.add_subplot(gs[2,idx], projection = projection)
+            ax = fig.add_subplot(gs1[idx], projection = projection)
             if extent == "global":
                 ax.set_global()
             elif extent == "europe":
@@ -86,35 +89,98 @@ class PlotsAVSF:
             ax.coastlines()
             cs = ax.contourf(lon, lat, run_data[idx+1,:], levels = levels,transform=ccrs.PlateCarree(),cmap=cmap, **kwargs)
             ax.set_title(r'$\sigma_{run}$ '+years[idx+1], loc = 'left', fontsize = 10)
-            axes.append(ax)
+            p = ax.get_position()
+            ax.set_position([p.x0, y0-p.height-0.06, p.width, p.height])
 
-        fig.subplots_adjust(bottom=0.1, top=0.9, left=0.1, right=0.85, wspace=0.02, hspace=0.02)
-        cb_ax = fig.add_axes([0.88, 0.4, 0.01, 0.2])
+            axes.append(ax)
+        
+        #breakpoint()
+        #print([axes[i].get_position() for i in range(len(axes))])
+
+        #fig.subplots_adjust(bottom=0.1, top=0.9, left=0.1, right=0.85, wspace=0.02, hspace=0.02)
+        #gs.update(bottom=0.1, top=0.9, left=0.1, right=0.85, wspace=0.02, hspace=0.02)
+        cb_ax = fig.add_axes([0.87, y0-p.height-0.06, 0.01, p.height+0.06+h])
 
         cbar = plt.colorbar(cs, cax = cb_ax, orientation = "vertical", use_gridspec=False)
         cbar.ax.set_yticklabels(['{:.1f}'.format(x) for x in levels], fontsize=10)
         cbar.set_label(bartitle, wrap=True, fontsize = 10) 
+        #gs.update(hspace=0.02)
+        #plt.subplots_adjust(hspace = 0.01)
+        #gs.tight_layout(fig)
         return fig
 
     def compare_temp(self, extent = "global"):
-        year_data = np.stack([self.ds[run]["temp2"][3:-3,...].reshape(-1,6,96,192)[::2,...] for run in self.ds]).mean(0).std(0, ddof = 1)[2,...]
-        run_data = np.stack([self.ds[run]["temp2"][3:-3,...].reshape(-1,6,96,192)[::2,...] for run in self.ds]).std(0, ddof=1)[:5,...][:,2,...]
-        years = [str(i) for i in sorted(self.years)[:5]]
+        year_data = np.stack([self.ds[run]["temp2"][3:-3,...].reshape(-1,6,96,192)[::2,...] for run in self.ds]).mean(0).std(0, ddof = 1).mean(0)
+        run_data = np.stack([self.ds[run]["temp2"][3:-3,...].reshape(-1,6,96,192)[::2,...] for run in self.ds]).std(0, ddof=1)[1:25:5,...].mean(1)
+        years = [str(i) for i in sorted(self.years)[1:25:5]]
         lon = self.ds["run_1"]["lon"][:]
         lat = self.ds["run_1"]["lat"][:]
-        fig = self.compare(lat, lon, run_data, year_data, years, extent = extent, cmap = plt.cm.Reds, figtitle = "Compare 2m temp in June", bartitle = "2m temp in K")
+        fig = self.compare(lat, lon, run_data, year_data, years, extent = extent, cmap = plt.cm.Reds, figtitle = "Compare 2m temp in JJA", bartitle = "2m temp in K")
 
         return fig
 
     def compare_rain(self, extent = "global"):
-        year_data = (np.stack([(self.ds[run]["aprc"][3:-3,...].reshape(-1,6,96,192)[::2,...]+self.ds[run]["aprl"][3:-3,...].reshape(-1,6,96,192)[::2,...]) for run in self.ds])*86400).mean(0).std(0, ddof=1)[2,...]
-        run_data = (np.stack([(self.ds[run]["aprc"][3:-3,...].reshape(-1,6,96,192)[::2,...]+self.ds[run]["aprl"][3:-3,...].reshape(-1,6,96,192)[::2,...]) for run in self.ds])*86400).std(0, ddof=1)[:5,...][:,2,...]
-        years = [str(i) for i in sorted(self.years)[:5]]
+        year_data = (np.stack([(self.ds[run]["aprc"][2:-4,...].reshape(-1,3,96,192)[1::4,...]+self.ds[run]["aprl"][2:-4,...].reshape(-1,3,96,192)[1::4,...]) for run in self.ds])*86400).mean(0).std(0, ddof=1).mean(0)
+        run_data = (np.stack([(self.ds[run]["aprc"][2:-4,...].reshape(-1,3,96,192)[1::4,...]+self.ds[run]["aprl"][2:-4,...].reshape(-1,3,96,192)[1::4,...]) for run in self.ds])*86400).std(0, ddof=1)[1:25:5,...].mean(1)
+        years = [str(i) for i in sorted(self.years)[1:25:5]]
         lon = self.ds["run_1"]["lon"][:]
         lat = self.ds["run_1"]["lat"][:]
-        fig = self.compare(lat, lon, run_data, year_data, years, extent = extent, cmap = plt.cm.Blues, figtitle = "Compare Precipitation in June", bartitle = r'Precip in mm d$^{-1}$'")
+        fig = self.compare(lat, lon, run_data, year_data, years, extent = extent, cmap = plt.cm.Blues, figtitle = "Compare Precipitation in JJA", bartitle = r'Precip in mm d$^{-1}$')
 
         return fig
+
+    def diff_jja(self, year, extent = "global"):
+        year_data_temp = np.stack([self.ds[run]["temp2"][2:-4,...].reshape(-1,3,96,192)[1::4,...] for run in self.ds]).mean(0).std(0, ddof = 1).mean(0)
+        run_data_temp = np.stack([self.ds[run]["temp2"][2:-4,...].reshape(-1,3,96,192)[1::4,...] for run in self.ds]).std(0, ddof=1)[self.years.index(year),...].mean(0)
+        year_data_rain = (np.stack([(self.ds[run]["aprc"][2:-4,...].reshape(-1,3,96,192)[1::4,...]+self.ds[run]["aprl"][2:-4,...].reshape(-1,3,96,192)[1::4,...]) for run in self.ds])*86400).mean(0).std(0, ddof=1).mean(0)
+        run_data_rain = (np.stack([(self.ds[run]["aprc"][2:-4,...].reshape(-1,3,96,192)[1::4,...]+self.ds[run]["aprl"][2:-4,...].reshape(-1,3,96,192)[1::4,...]) for run in self.ds])*86400).std(0, ddof=1)[self.years.index(year),...].mean(0)
+        lon = self.ds["run_1"]["lon"][:]
+        lat = self.ds["run_1"]["lat"][:]
+
+        diff_temp = year_data_temp - run_data_temp
+        diff_rain = year_data_rain - run_data_rain
+
+        diff_temp = np.concatenate([diff_temp[:,lon > 180],diff_temp[:,lon <= 180]], axis = -1)
+        diff_rain = np.concatenate([diff_rain[:,lon > 180],diff_rain[:,lon <= 180]], axis = -1)
+        lon = np.concatenate([lon[lon > 180] - 360, lon[lon <= 180]], axis = -1)
+        if extent == "europe":
+            diff_temp = diff_temp[np.logical_and(lat>=34., lat<=59.),:][:,np.logical_and(lon>=-12., lon<=32.)]
+            diff_rain = diff_rain[np.logical_and(lat>=34., lat<=59.),:][:,np.logical_and(lon>=-12., lon<=32.)]
+            lon = lon[np.logical_and(lon>=-12., lon<=32.)]
+            lat = lat[np.logical_and(lat>=34., lat<=59.)]
+
+
+
+        fig = plt.figure(dpi = 300)
+
+        for idx, data in enumerate([diff_temp, diff_rain]):
+
+            vmin = data.min()
+            vmax = data.max()
+
+            norm = colors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=1) if vmax < 0 else colors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
+
+            ax = fig.add_subplot(2, 1, idx+1, projection=ccrs.PlateCarree())
+            if extent == "global":
+                ax.set_global()
+            elif extent == "europe":
+                ax.set_extent([-12.,32.,34.,58.])
+            ax.coastlines()    
+            levels = np.linspace(vmin,vmax, 8) 
+            if not 0 in levels and vmax>0:
+                levels = np.linspace(vmin, 0, max(2,int((abs(vmin)/(abs(vmin)+vmax) )* 7))+1)
+                levels = np.append(levels, np.linspace(0, vmax, max(2,int((abs(vmax)/(abs(vmin)+vmax) ) * 7)))[1:])
+            cs = ax.contourf(lon, lat, diff_temp, levels = levels, transform=ccrs.PlateCarree(),cmap=plt.cm.BrBG, norm = norm)
+            ax.set_title(["a","b"][idx], loc = 'left', fontsize = 10,fontweight="bold")
+
+            cbar = fig.colorbar(cs, ax = ax, pad = 0.03)
+            cbar.ax.set_yticklabels(['{:.2f}'.format(x) for x in levels], fontsize=10)
+            cbar.set_label(["2m temp: "+r'$\sigma_{year} - \sigma_{run}$' + " in K", "Precip: "+ r'$\sigma_{year} - \sigma_{run}$' + " in "+ r'mm d$^{-1}$'][idx], fontsize = 10)
+
+        fig.tight_layout()
+
+        return fig
+
 
     def summer_monthly(self, lon, lat, data, extent, over_dim = "", for_dim = "", variable = "", unit = "", value = "sample std. dev.", cmap = plt.cm.Reds, figtitle = None, bartitle = None, **kwargs):
     
@@ -133,10 +199,10 @@ class PlotsAVSF:
 
         fig = plt.figure(dpi = 300)
         #fig, axes = plt.subplots(2, 3, dpi = 300, projection=ccrs.PlateCarree())
-        if figtitle is None:
-            fig.suptitle(f"{variable} {value}\nover {over_dim} for {for_dim}")
-        else:
-            fig.suptitle(figtitle)
+        # if figtitle is None:
+        #     fig.suptitle(f"{variable} {value}\nover {over_dim} for {for_dim}")
+        # else:
+        #     fig.suptitle(figtitle)
         projection = ccrs.PlateCarree()
         axes_class = (GeoAxes,
                   dict(map_projection=projection))
@@ -145,7 +211,7 @@ class PlotsAVSF:
                     axes_pad=0.25,
                     cbar_location='bottom' if extent != "europe" else 'right',
                     cbar_mode='single',
-                    cbar_pad=-0.2 if extent != "europe" else 0.2,
+                    cbar_pad=-0.2 if extent != "europe" else -0.2,
                     cbar_size='2%',
                     label_mode='')
         #gs = gridspec.GridSpec(2,3)
@@ -205,13 +271,15 @@ class PlotsAVSF:
         #     cbar = fig.colorbar(m, ax=axgr, shrink=0.6, ticks = np.linspace(kwargs["vmin"], kwargs["vmax"],5), orientation = "horizontal" if extent != "europe" else 'vertical', pad = 0.1) 
         # else:
         if extent != "europe":
-            cbar = fig.colorbar(cs, ax=axgr, shrink=0.6, orientation = "horizontal" , pad = 0.1) 
+            cbar = fig.colorbar(cs, ax=axgr, shrink=0.6, orientation = "horizontal" , pad = 0.03) 
             cbar2 = plt.colorbar(cs, cax = axgr.cbar_axes[0], orientation = "horizontal", fraction = 0.5, use_gridspec=True)
             cbar.ax.set_xticklabels(['{:.2f}'.format(x) for x in levels], fontsize=10)
             cbar2.ax.tick_params(size=0)
             cbar2.set_ticks([])
             cbar2.solids.set(alpha=0)
             cbar2.outline.set_visible(False)
+            p = cbar.ax.get_position()
+            cbar.ax.set_position([p.x0, p.y0+0.07,p.width, p.height])
         else:
             cbar = plt.colorbar(cs, cax = axgr.cbar_axes[0], orientation = "vertical", fraction = 0.5, use_gridspec=True)
             cbar.ax.set_yticklabels(['{:.2f}'.format(x) for x in levels], fontsize=10)
@@ -224,7 +292,7 @@ class PlotsAVSF:
         else:
             cbar.set_label(bartitle, wrap=True, fontsize = 10)   
         #fig.subplots_adjust(hspace=0)
-        fig.tight_layout()#pad = 0.3)     
+        #fig.tight_layout()#pad = 0.3)     
         #gs.tight_layout(fig)
         return fig
 
@@ -409,6 +477,94 @@ class PlotsAVSF:
 
         fig = self.monthly_mean_timeseries(data, figtitle = f"Precip (large + convective), timeseries %runs same anomaly direction as mean,\nmean over {extent}", ylabel = r"% runs anomaly same direction as mean"+"\nfor Precip (large + convective)")
 
+    def joint_anomaly_ts(self, extent = "global"):
+        
+        fig = plt.figure(dpi = 300)
+
+        ax = fig.add_subplot(1, 1, 1)
+        ax.set_ylabel(r"% runs anomaly same direction as mean")
+
+        yearsort = np.array(self.years).argsort()
+        years = np.array(self.years)[yearsort]
+
+        colors = ["#ff6e54","#003f5c"]
+
+        for idx in range(2):
+            lat = self.ds["run_1"]["lat"][:]
+            lon = self.ds["run_1"]["lon"][:]
+            raw_data = np.stack([self.ds[run]["temp2"][2:-4,...].reshape(-1,3,96,192)[1::4,...] for run in self.ds]).mean(2) if idx == 0 else (np.stack([(self.ds[run]["aprc"][2:-4,...].reshape(-1,3,96,192)[1::4,...]+self.ds[run]["aprl"][2:-4,...].reshape(-1,3,96,192)[1::4,...]) for run in self.ds])*86400).mean(2)
+            if extent == "europe":
+                raw_data = raw_data[:,:,np.logical_and(lat>=34., lat<=59.),:][:,:,:,np.logical_and(lon>=-12., lon<=32.)]
+                lat = lat[np.logical_and(lat>=34., lat<=59.)]
+
+            w = np.cos(lat/180*np.pi)
+            w = w/w.sum()
+            inter_year = (raw_data.mean((0,3))*w).sum(1).mean(0) # runs years lat lon
+            anom = ((raw_data.mean(3)*w).sum(2) - inter_year)
+            anom_mean = anom.mean(0) #mean over runs
+            data = np.where(np.sign(anom) == np.sign(anom_mean), 1, 0).mean(0)
+
+            ax.plot(years, data[yearsort], label = ["2m Temp","Precip"][idx], color = colors[idx])
+        
+        ax.legend()
+        ax.set_ylim([0,1])
+        ax.axhline(y = 0.5, color = 'grey', linestyle = '--') 
+
+        return fig
+
+    def joint_anomaly_density(self, extent = "europe"):
+
+        fig, axes = plt.subplots(2, 1, sharex=True, sharey=True, dpi = 300)
+        for idx in range(2):
+            lat = self.ds["run_1"]["lat"][:]
+            lon = self.ds["run_1"]["lon"][:]
+            raw_data = np.stack([self.ds[run]["temp2"][2:-4,...].reshape(-1,3,96,192)[1::4,...] for run in self.ds]).mean(2) if idx == 0 else (np.stack([(self.ds[run]["aprc"][2:-4,...].reshape(-1,3,96,192)[1::4,...]+self.ds[run]["aprl"][2:-4,...].reshape(-1,3,96,192)[1::4,...]) for run in self.ds])*86400).mean(2)
+            if extent == "europe":
+                raw_data = raw_data[:,:,np.logical_and(lat>=34., lat<=59.),:][:,:,:,np.logical_and(lon>=-12., lon<=32.)]
+                lat = lat[np.logical_and(lat>=34., lat<=59.)]
+            inter_year = raw_data.mean((0,1))
+            anom = raw_data - inter_year
+            x = anom.mean(0, keepdims = True).repeat(11, axis = 0).reshape(-1)
+            y = anom.reshape(-1)
+
+            w = np.cos(lat/180*np.pi)
+            w = w[np.newaxis,np.newaxis,:,np.newaxis].repeat(18 if extent == "europe" else 192, 3).repeat(11, 0).repeat(27, 1).reshape(-1)
+            w = w / w.sum(0)
+
+            kde = FFTKDE(kernel='gaussian', norm=2)
+            grid, points = kde.fit(np.stack([x,y]).T, weights = w).evaluate(grid_points = (101,101))
+            xi, yi = np.meshgrid(np.unique(grid[:, 0]), np.unique(grid[:, 1]))
+            zi = points.reshape((101,101)).T
+            
+            ax = axes[idx]
+
+            ax.contourf(xi, yi, zi, cmap = plt.cm.Blues, alpha = 1)
+            mask = (np.sign(xi) == np.sign(yi)) | (xi == 0) | (yi == 0 )
+            zi2 = np.ma.masked_array(zi, mask)
+            ax.contourf(xi, yi, zi2, cmap = plt.cm.Oranges, alpha = 1)
+
+            ax.set_xlim((-4,4))
+            ax.set_ylim((-4,4))
+            ax.set_title(["2m Temp in K ","Precip in "+r"mm d$^{-1}$"][idx], loc='left', wrap=True, fontsize = 10)
+
+            cs = ax.contourf(xi, yi, zi, cmap = plt.cm.Greys, alpha = 0)
+            cs.set_alpha(1)
+            cbar = fig.colorbar(cs, ax = ax, pad = 0.03)
+            if idx == 1:
+                ax.set_xlabel("Mean Anomaly")
+    
+        ax = fig.add_subplot(111, frameon=False)
+        # hide tick and tick label of the big axis
+        ax.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
+        ax.set_ylabel("Anomaly")
+        
+        
+        fig.tight_layout()
+
+        return fig
+
+
+            
 
     def density_anomalies(self, x, y, figtitle = "density estimate of anomalies", xlabel = "mean anomaly of all runs", ylabel = "anomaly", xlim = (-4,4), ylim = (-4,4), weights = None, extent = "global"):
         
@@ -506,98 +662,149 @@ class PlotsAVSF:
         w = np.transpose(w[np.newaxis,:,np.newaxis].repeat(18 if extent == "europe" else 192, 2).repeat(6,0), (1,2,0)).reshape((-1,6))
 
         fig = plt.figure(dpi = 300)
-        fig.suptitle("Joint density of Precip (large + convective) and Skill in Precip forecasting\n(over years, runs, weighted grid cells)")
+        #fig.suptitle("Joint density of Precip (large + convective) and Skill in Precip forecasting\n(over years, runs, weighted grid cells)")
         mask0 = (x.flatten() < 8) | (y.flatten() > 0.5)
         mask = (y.flatten() > 0.5) & mask0
         ax = fig.add_subplot(2, 1, 1)
         hist = ax.hist2d(x.flatten()[mask0], y.flatten()[mask0], bins = 30, cmap = plt.cm.Greens, range = [[0,x.flatten()[mask0].max()], [0,1]], weights = w.flatten()[mask0] / (w.flatten()[mask0].sum()))
         ax.set_ylim(0, 1)
-        ax.set_title(f"Area: {extent}, All data", loc='center', wrap=True, fontsize = 10)
-        cbar = fig.colorbar(hist[3])
+        ax.set_title(f"All data", loc='center', wrap=True, fontsize = 10)
+        cbar = fig.colorbar(hist[3], ax = ax, pad = 0.03)
         ax = fig.add_subplot(2, 1, 2)
         hist = ax.hist2d(x.flatten()[mask], y.flatten()[mask], bins = 30, cmap = plt.cm.Greens, range = [[0,max(x.flatten()[mask].max(), 0.5)], [0.5,1]], weights = w.flatten()[mask]/ (w.flatten()[mask].sum()))
         ax.set_ylim(0.5, 1)
-        ax.set_title(f"Area: {extent}, Data with min. 0.5 Skill", loc='center', wrap=True, fontsize = 10)
-        cbar = fig.colorbar(hist[3])
+        ax.set_title(f"Data with min. 0.5 Skill", loc='center', wrap=True, fontsize = 10)
+        cbar = fig.colorbar(hist[3], ax = ax, pad = 0.03)
 
-        fig.add_subplot(111, frameon=False)
+        ax = fig.add_subplot(111, frameon=False)
         # hide tick and tick label of the big axis
-        plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
-        plt.ylabel("Skill in Precip (large + convective) in %years") 
-        plt.xlabel("Precip (large + convective)"+r"mm d$^{-1}$")
+        ax.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
+        ax.set_ylabel("Skill in Precip (large + convective) in %years") 
+        ax.set_xlabel("Precip (large + convective) in "+r"mm d$^{-1}$")
+
+        p = ax.get_position()
+        ax.set_position([p.x0, p.y0, 0.8, p.height])
 
         plt.tight_layout()
 
         return fig
+
+
+    
+
+    @classmethod
+    def paper_plots(cls, base_dir, out_dir):
+        self = cls(base_dir)
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents = True, exist_ok = True)
+        with PdfPages(out_dir/"Fig1.pdf") as pdf:
+            fig = self.compare_temp(extent = "global")
+            pdf.savefig(fig, bbox_inches='tight') 
+            plt.close()
+        with PdfPages(out_dir/"Fig2.pdf") as pdf:
+            fig = self.compare_rain(extent = "global")
+            pdf.savefig(fig, bbox_inches='tight') 
+            plt.close()
+        with PdfPages(out_dir/"Fig3.pdf") as pdf:
+            fig = self.diff_jja(extent = "global", year = 1990)
+            pdf.savefig(fig, bbox_inches='tight') 
+            plt.close()
+        with PdfPages(out_dir/"Fig4.pdf") as pdf:
+            fig = self.summer_temp_std_count(extent = "global")
+            pdf.savefig(fig, bbox_inches='tight') 
+            plt.close()
+        with PdfPages(out_dir/"Fig5.pdf") as pdf:
+            fig = self.summer_rain_std_count(extent = "global")
+            pdf.savefig(fig, bbox_inches='tight') 
+            plt.close()
+        with PdfPages(out_dir/"Fig6.pdf") as pdf:
+            fig = self.joint_density_skill_rain(extent = "global")
+            pdf.savefig(fig, bbox_inches='tight') 
+            plt.close()
+        with PdfPages(out_dir/"Fig7.pdf") as pdf:
+            fig = self.joint_anomaly_ts(extent = "europe")
+            pdf.savefig(fig, bbox_inches='tight') 
+            plt.close()
+        with PdfPages(out_dir/"Fig8.pdf") as pdf:
+            fig = self.joint_anomaly_density(extent = "europe")
+            pdf.savefig(fig, bbox_inches='tight') 
+            plt.close()
+
+
 
     @classmethod
     def plot(cls, base_dir, out_file):
         self = cls(base_dir)
         with PdfPages(out_file) as pdf:
             for extent in ["global","europe"]:
-                fig = self.joint_density_skill_rain(extent = extent)
-                pdf.savefig(fig, bbox_inches='tight') 
-                plt.close()
-                fig = self.summer_temp_anomaly_density(extent = extent)
-                pdf.savefig(fig, bbox_inches='tight') 
-                plt.close()
-                fig = self.summer_rain_anomaly_density(extent = extent)
-                pdf.savefig(fig, bbox_inches='tight') 
-                plt.close()
-                fig = self.summer_temp_std_diff_ts(extent = extent)
-                pdf.savefig(fig, bbox_inches='tight') 
-                plt.close()
-                fig = self.summer_rain_std_diff_ts(extent = extent)
-                pdf.savefig(fig, bbox_inches='tight') 
-                plt.close()
-                fig = self.summer_temp_anomaly_ts(extent = extent)
-                pdf.savefig(fig, bbox_inches='tight') 
-                plt.close()
-                fig = self.summer_rain_anomaly_ts(extent = extent)
-                pdf.savefig(fig, bbox_inches='tight') 
-                plt.close()
-                fig = self.compare_temp(extent = extent)
-                pdf.savefig(fig, bbox_inches='tight') 
-                plt.close()
-                fig = self.compare_rain(extent = extent)
-                pdf.savefig(fig, bbox_inches='tight') 
-                plt.close()
-                fig = self.summer_temp_inter_year(run = "mean", extent = extent)
-                pdf.savefig(fig) 
-                plt.close()
-                fig = self.summer_rain_inter_year(run = "mean", extent = extent)
-                pdf.savefig(fig) 
-                plt.close()
-                for run in self.ds:
-                    fig = self.summer_temp_inter_year(run = run, extent = extent)
-                    pdf.savefig(fig) 
-                    plt.close()
-                    fig = self.summer_rain_inter_year(run = run, extent = extent)
-                    pdf.savefig(fig) 
-                    plt.close()
-                    #break
+                # fig = self.joint_density_skill_rain(extent = extent)
+                # pdf.savefig(fig, bbox_inches='tight') 
+                # plt.close()
+                # fig = self.summer_temp_anomaly_density(extent = extent)
+                # pdf.savefig(fig, bbox_inches='tight') 
+                # plt.close()
+                # fig = self.summer_rain_anomaly_density(extent = extent)
+                # pdf.savefig(fig, bbox_inches='tight') 
+                # plt.close()
+                # fig = self.summer_temp_std_diff_ts(extent = extent)
+                # pdf.savefig(fig, bbox_inches='tight') 
+                # plt.close()
+                # fig = self.summer_rain_std_diff_ts(extent = extent)
+                # pdf.savefig(fig, bbox_inches='tight') 
+                # plt.close()
+                # fig = self.summer_temp_anomaly_ts(extent = extent)
+                # pdf.savefig(fig, bbox_inches='tight') 
+                # plt.close()
+                # fig = self.summer_rain_anomaly_ts(extent = extent)
+                # pdf.savefig(fig, bbox_inches='tight') 
+                # plt.close()
+                # fig = self.compare_temp(extent = extent)
+                # pdf.savefig(fig, bbox_inches='tight') 
+                # plt.close()
                 
-                fig = self.summer_temp_std_count(extent = extent)
-                pdf.savefig(fig) 
+                # fig = self.compare_rain(extent = extent)
+                # pdf.savefig(fig, bbox_inches='tight') 
+                # plt.close()
+                fig = self.diff_jja(extent = extent, year = sorted(self.years)[0])
+                pdf.savefig(fig, bbox_inches='tight') 
                 plt.close()
-                fig = self.summer_rain_std_count(extent = extent)
-                pdf.savefig(fig) 
-                plt.close()
-                for year in sorted(self.years):
-                    fig = self.summer_temp_inter_run(year = year, extent = extent)
-                    pdf.savefig(fig) 
-                    plt.close()
-                    fig = self.summer_temp_std_diff(year = year, extent = extent)
-                    pdf.savefig(fig) 
-                    plt.close()
-                    fig = self.summer_rain_inter_run(year = year, extent = extent)
-                    pdf.savefig(fig) 
-                    plt.close()
-                    fig = self.summer_rain_std_diff(year = year, extent = extent)
-                    pdf.savefig(fig) 
-                    plt.close()
-                    #break
+                break
+                # fig = self.summer_temp_inter_year(run = "mean", extent = extent)
+                # pdf.savefig(fig) 
+                # plt.close()
+                # fig = self.summer_rain_inter_year(run = "mean", extent = extent)
+                # pdf.savefig(fig) 
+                # plt.close()
+                # for run in self.ds:
+                #     fig = self.summer_temp_inter_year(run = run, extent = extent)
+                #     pdf.savefig(fig) 
+                #     plt.close()
+                #     fig = self.summer_rain_inter_year(run = run, extent = extent)
+                #     pdf.savefig(fig) 
+                #     plt.close()
+                #     #break
+                
+                # fig = self.summer_temp_std_count(extent = extent)
+                # pdf.savefig(fig) 
+                # plt.close()
+                # fig = self.summer_rain_std_count(extent = extent)
+                # pdf.savefig(fig) 
+                # plt.close()
+                # for year in sorted(self.years):
+                #     fig = self.summer_temp_inter_run(year = year, extent = extent)
+                #     pdf.savefig(fig) 
+                #     plt.close()
+                #     fig = self.summer_temp_std_diff(year = year, extent = extent)
+                #     pdf.savefig(fig) 
+                #     plt.close()
+                #     fig = self.summer_rain_inter_run(year = year, extent = extent)
+                #     pdf.savefig(fig) 
+                #     plt.close()
+                #     fig = self.summer_rain_std_diff(year = year, extent = extent)
+                #     pdf.savefig(fig) 
+                #     plt.close()
+                #     #break
 
 if __name__ == "__main__":
     import fire
-    fire.Fire(PlotsAVSF.plot)
+    fire.Fire(PlotsAVSF.paper_plots)#plot)
